@@ -1,0 +1,52 @@
+{# config.toml — managed by Ansible (role: open_pubusb). Do not edit by hand. #}
+{# Schema: see the `Config` types in crates/open-pubusb/src/config.rs #}
+{%- macro toml_scalar(value) -%}
+{%- if value is sameas true -%}
+true
+{%- elif value is sameas false -%}
+false
+{%- elif value is number -%}
+{{ value }}
+{%- else -%}
+"{{ value | string | replace('\\', '\\\\') | replace('"', '\\"') }}"
+{%- endif -%}
+{%- endmacro -%}
+[server]
+listen = "{{ open_pubusb_bind_address }}:{{ open_pubusb_listen_port }}"
+admin_listen = "{{ open_pubusb_bind_address }}:{{ open_pubusb_admin_port }}"
+max_message_size_bytes = 10485760
+shutdown_grace_secs = {{ open_pubusb_shutdown_grace_secs }}
+enable_reflection = true
+
+[storage]
+{# In docker mode, open_pubusb_data_dir is the *host* bind-mount source (see
+   tasks/install_docker.yml); inside the container it is always mounted
+   at open_pubusb_container_data_dir, so that is what the process must see. #}
+data_dir = "{{ open_pubusb_container_data_dir if open_pubusb_deploy_mode == 'docker' else open_pubusb_data_dir }}"
+ephemeral = {{ toml_scalar(open_pubusb_ephemeral) }}
+sync_interval_ms = {{ open_pubusb_sync_interval_ms }}
+cache_size_bytes = 33554432
+max_disk_bytes = 0
+
+[delivery]
+pull_max_wait_secs = 90
+streaming_pull_max_lifetime_secs = 1800
+push_timeout_secs = 10
+push_max_concurrency_per_sub = 16
+default_ack_deadline_secs = 10
+lease_scan_interval_ms = 100
+retention_sweep_interval_secs = 60
+
+[log]
+format = "{{ open_pubusb_log_format }}"
+level = "{{ open_pubusb_log_level }}"
+
+[metrics]
+enabled = true
+{% for section_name, section_values in (open_pubusb_extra_config | default({})).items() %}
+
+[{{ section_name }}]
+{% for key, value in section_values.items() %}
+{{ key }} = {{ toml_scalar(value) }}
+{% endfor %}
+{%- endfor %}

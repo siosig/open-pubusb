@@ -1,0 +1,28 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    open_pubusb_deploy_mode: docker
+  pre_tasks:
+    # The role pulls a published GHCR image, which may not exist yet for the
+    # version under test. CI builds the image from the checkout into the
+    # shared Docker daemon (see molecule.yml) and passes its name and the
+    # version in through the environment; unset variables leave the role
+    # defaults (the real registry) in effect.
+    - name: Use the version under test
+      ansible.builtin.set_fact:
+        open_pubusb_version: "{{ lookup('env', 'OPEN_PUBUSB_VERSION') }}"
+      when: lookup('env', 'OPEN_PUBUSB_VERSION') | length > 0
+
+    - name: Use the image built from source
+      ansible.builtin.set_fact:
+        open_pubusb_image: "{{ lookup('env', 'OPEN_PUBUSB_IMAGE') }}"
+      when: lookup('env', 'OPEN_PUBUSB_IMAGE') | length > 0
+
+    - name: Ensure Docker SDK for Python is installed (required by community.docker modules)
+      ansible.builtin.pip:
+        name: docker
+        state: present
+  roles:
+    - role: open_pubusb

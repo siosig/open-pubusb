@@ -1,0 +1,12 @@
+---
+# The role creates the "open-pubusb" container on the Docker daemon shared
+# with the host (see molecule.yml), so destroying the molecule instance does
+# not remove it. Take it down here so `molecule test` leaves nothing behind.
+- name: Cleanup
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Remove the open-pubusb container created on the shared daemon
+      community.docker.docker_container:
+        name: open-pubusb
+        state: absent

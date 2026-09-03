@@ -1,0 +1,11 @@
+---
+# Common overrides applied to every host in inventory. Values here take
+# precedence over `roles/open_pubusb/defaults/main.yml` but are themselves
+# overridden by host_vars, `-e`, and CLI extra-vars.
+#
+# This file intentionally only demonstrates the override mechanism; leave
+# it empty of real values (defaults already documented in ansible/README.md)
+# unless your environment needs a site-wide change, e.g.:
+#
+# open_pubusb_log_level: debug
+# open_pubusb_release_base_url: "https://mirror.example.internal/open-pubusb/releases"

@@ -1,0 +1,174 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings -W clippy::unwrap_used -W clippy::expect_used
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: cargo audit (RustSec advisory DB)
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cargo deny (licenses, bans, sources)
+        uses: EmbarkStudios/cargo-deny-action@v2
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@nextest
+      - run: cargo nextest run --workspace
+
+  compat:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: cargo build --release -p open-pubusb
+      - name: Start open-pubusb (ephemeral)
+        run: |
+          ./target/release/open-pubusb serve --ephemeral --listen 127.0.0.1:8085 --admin-listen 127.0.0.1:8086 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8086/readyz && break; sleep 1; done
+      - name: Python compat tests
+        working-directory: tests/compat/python
+        env:
+          PUBSUB_EMULATOR_HOST: 127.0.0.1:8085
+          PUBSUB_PROJECT_ID: local-project
+        run: |
+          pip install -e .
+          pytest -q
+      - name: Node compat tests
+        working-directory: tests/compat/node
+        env:
+          PUBSUB_EMULATOR_HOST: 127.0.0.1:8085
+          PUBSUB_PROJECT_ID: local-project
+        run: |
+          npm install
+          npm test
+      - name: Rust compat tests
+        working-directory: tests/compat/rust
+        env:
+          PUBSUB_EMULATOR_HOST: 127.0.0.1:8085
+          PUBSUB_PROJECT_ID: local-project
+        run: cargo test
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # `requests` is what community.docker's modules need to talk to the daemon.
+      - run: pip install ansible-core ansible-lint yamllint requests
+      - run: ansible-galaxy collection install -r ansible/requirements.yml
+      - run: ansible-lint ansible/
+      - run: yamllint ansible/
+      # `-e open_pubusb_deploy_mode=docker` (not systemd) here: this project has no
+      # tagged GitHub Release yet, so the systemd path's `get_url` performs a
+      # real HTTPS request even under --check and would 404. The docker path
+      # never contacts the registry under --check (community.docker mocks
+      # the pull/container diff), so it is the mode that can actually stay
+      # green pre-release. GitHub-hosted runners ship Docker by default.
+      - run: ansible-playbook -i ansible/inventory/hosts.yml ansible/site.yml --check --diff -e open_pubusb_deploy_mode=docker
+
+  molecule:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [default, docker]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ansible-core molecule molecule-plugins[docker] requests
+      - run: ansible-galaxy collection install -r ansible/requirements.yml
+
+      # The role installs the artifacts a release publishes: the GHCR image
+      # (docker mode) and the release tarball (systemd mode). Build both from
+      # this checkout so the role is exercised against the current source and
+      # the job does not depend on a release of this version already existing.
+      - name: Read crate version
+        id: version
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "open-pubusb") | .version')
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v5
+      - name: Build image from source
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Stage and serve a local release mirror
+        if: matrix.scenario == 'default'
+        run: |
+          scripts/ci/stage-release-mirror.sh \
+            "ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}" \
+            "${{ steps.version.outputs.version }}" dist
+          python3 -m http.server 8000 --bind 0.0.0.0 --directory dist >/dev/null 2>&1 &
+          # The molecule instance is a container on the default bridge network;
+          # it reaches this host through the bridge gateway address.
+          gateway=$(docker network inspect bridge -f '{{ (index .IPAM.Config 0).Gateway }}')
+          echo "OPEN_PUBUSB_RELEASE_BASE_URL=http://${gateway}:8000" >> "$GITHUB_ENV"
+      - name: molecule test (${{ matrix.scenario }})
+        working-directory: ansible/roles/open_pubusb
+        env:
+          OPEN_PUBUSB_VERSION: ${{ steps.version.outputs.version }}
+          OPEN_PUBUSB_IMAGE: ghcr.io/${{ github.repository }}
+        run: molecule test -s ${{ matrix.scenario }}

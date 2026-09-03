@@ -1,0 +1,29 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    open_pubusb_deploy_mode: docker
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Check open-pubusb container is running
+      community.docker.docker_container_info:
+        name: "{{ open_pubusb_service_name }}"
+      register: open_pubusb_container_info
+      failed_when: >-
+        not open_pubusb_container_info.exists or
+        open_pubusb_container_info.container.State.Status != 'running'
+
+    - name: Check /readyz responds 200
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ open_pubusb_admin_port }}/readyz"
+        status_code: 200
+
+    - name: Check open-pubusb version matches open_pubusb_version
+      community.docker.docker_container_exec:
+        container: "{{ open_pubusb_service_name }}"
+        command: open-pubusb version
+      register: open_pubusb_version_check
+      changed_when: false
+      failed_when: ("open-pubusb " + open_pubusb_version + " (") not in open_pubusb_version_check.stdout

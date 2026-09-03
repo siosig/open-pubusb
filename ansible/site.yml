@@ -1,0 +1,7 @@
+---
+- name: Deploy open-pubusb
+  hosts: open_pubusb
+  become: true
+  gather_facts: true
+  roles:
+    - role: open_pubusb

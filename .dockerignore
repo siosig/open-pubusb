@@ -1,0 +1,22 @@
+# Build artifacts (regenerated in-container).
+/target/
+target-agents/
+
+# VCS metadata - not needed to compile, and .git can be large.
+.git/
+.gitmodules
+
+# Editor/agent-local state.
+.vscode/
+.claude/
+.specify/
+
+# Compat test harness node_modules - large, irrelevant to the server build.
+tests/compat/*/node_modules/
+
+# NOTE: third_party/ (the googleapis git submodule consumed by
+# crates/open-pubusb-proto/build.rs via `protox`) and every crates/**, Cargo.toml,
+# Cargo.lock are intentionally NOT excluded here - they are required by
+# `docker build`. Run `git submodule update --init` before building so the
+# submodule content actually exists on disk (Docker has no concept of git
+# submodules, so it can only COPY what is already checked out).

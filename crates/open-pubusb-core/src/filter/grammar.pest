@@ -1,0 +1,38 @@
+// Subscription filter grammar for the `filter` field on
+// Subscription.CreateSubscription.
+//
+// Mixing AND and OR at the same level without parentheses is rejected by
+// construction: `expr` parses one `unary`, then tries an `and_chain`
+// (one-or-more "AND unary"); if that matches nothing (the next token
+// isn't "AND"), it backtracks and tries `or_chain` instead. Either chain
+// stops as soon as it can't extend itself, so `a AND b OR c` parses only
+// as far as `a AND b` — the leftover `OR c` is unconsumed input, which
+// `filter`'s trailing `EOI` then rejects as a parse error.
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+filter = { SOI ~ expr ~ EOI }
+
+expr = { unary ~ (and_chain | or_chain)? }
+and_chain = { ("AND" ~ unary)+ }
+or_chain = { ("OR" ~ unary)+ }
+
+unary = { negation? ~ primary }
+negation = @{ "NOT" ~ WHITESPACE+ | "-" }
+
+primary = { comparison | has_attr | function | ("(" ~ expr ~ ")") }
+
+comparison = { attribute ~ compare_op ~ string }
+compare_op = @{ "!=" | "=" }
+
+has_attr = { "attributes" ~ ":" ~ key }
+
+function = { "hasPrefix" ~ "(" ~ attribute ~ "," ~ string ~ ")" }
+
+attribute = { "attributes" ~ "." ~ key }
+key = { identifier | string }
+identifier = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+
+string = ${ "\"" ~ string_inner ~ "\"" }
+string_inner = @{ (escape | !("\"" | "\\") ~ ANY)* }
+escape = @{ "\\" ~ ("\"" | "\\" | "n" | "t" | ("u" ~ ASCII_HEX_DIGIT{4})) }

@@ -1,0 +1,42 @@
+---
+# Shared container definition, included both from install_docker.yml (normal
+# converge) and from the "Recreate open-pubusb container" handler (forced
+# recreate after config.toml content changes, which docker_container's own
+# diffing cannot see since it only compares its own module options, not the
+# bind-mounted file's content — see handlers/main.yml).
+- name: Create/update open-pubusb container (single definition)
+  community.docker.docker_container:
+    name: "{{ open_pubusb_service_name }}"
+    image: "{{ open_pubusb_image }}:{{ open_pubusb_image_tag }}"
+    pull: false
+    command:
+      - serve
+    state: healthy
+    healthy_wait_timeout: "{{ open_pubusb_verify_timeout_secs }}"
+    recreate: "{{ open_pubusb_force_recreate | default(false) }}"
+    restart_policy: "{{ open_pubusb_docker_restart_policy }}"
+    stop_timeout: "{{ open_pubusb_shutdown_grace_secs + 5 }}"
+    networks:
+      - name: "{{ open_pubusb_docker_network }}"
+    published_ports:
+      - "{{ open_pubusb_bind_address }}:{{ open_pubusb_listen_port }}:{{ open_pubusb_listen_port }}"
+      - "{{ open_pubusb_bind_address }}:{{ open_pubusb_admin_port }}:{{ open_pubusb_admin_port }}"
+    volumes:
+      - "{{ open_pubusb_data_dir }}:{{ open_pubusb_container_data_dir }}"
+      - "{{ open_pubusb_config_path }}:{{ open_pubusb_container_config_path }}:ro"
+    env:
+      OPEN_PUBUSB_CONFIG: "{{ open_pubusb_container_config_path }}"
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/open-pubusb
+        - health
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    comparisons:
+      image: strict
+      env: strict
+      "*": ignore
+  register: open_pubusb_container

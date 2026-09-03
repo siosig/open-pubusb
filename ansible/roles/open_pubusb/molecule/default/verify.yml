@@ -1,0 +1,29 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  vars:
+    open_pubusb_deploy_mode: systemd
+  vars_files:
+    - ../../defaults/main.yml
+  tasks:
+    - name: Gather service facts
+      ansible.builtin.service_facts:
+
+    - name: Check open-pubusb systemd unit is active
+      ansible.builtin.assert:
+        that:
+          - "'open-pubusb.service' in ansible_facts.services"
+          - ansible_facts.services['open-pubusb.service'].state == 'running'
+        fail_msg: "open-pubusb.service is not running: {{ ansible_facts.services['open-pubusb.service'] | default('not found') }}"
+
+    - name: Check /readyz responds 200
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ open_pubusb_admin_port }}/readyz"
+        status_code: 200
+
+    - name: Check open-pubusb version matches open_pubusb_version
+      ansible.builtin.command: "{{ open_pubusb_binary_path }} version"
+      register: open_pubusb_version_check
+      changed_when: false
+      failed_when: ("open-pubusb " + open_pubusb_version + " (") not in open_pubusb_version_check.stdout

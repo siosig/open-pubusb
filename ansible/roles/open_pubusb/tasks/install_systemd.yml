@@ -1,0 +1,72 @@
+---
+- name: Ensure download directory exists
+  ansible.builtin.file:
+    path: "{{ open_pubusb_download_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - install
+
+- name: Download open-pubusb release archive
+  ansible.builtin.get_url:
+    url: "{{ open_pubusb_release_archive_url }}"
+    dest: "{{ open_pubusb_release_archive_dest }}"
+    checksum: "sha256:{{ open_pubusb_checksum_url }}"
+    owner: root
+    group: root
+    mode: '0644'
+  tags:
+    - install
+
+- name: Ensure release extract directory exists
+  ansible.builtin.file:
+    path: "{{ open_pubusb_release_extract_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - install
+
+- name: Extract open-pubusb release archive
+  ansible.builtin.unarchive:
+    src: "{{ open_pubusb_release_archive_dest }}"
+    dest: "{{ open_pubusb_release_extract_dir }}"
+    remote_src: true
+    creates: "{{ open_pubusb_release_extract_dir }}/open-pubusb"
+  tags:
+    - install
+
+- name: Install open-pubusb binary
+  ansible.builtin.copy:
+    src: "{{ open_pubusb_release_extract_dir }}/open-pubusb"
+    dest: "{{ open_pubusb_binary_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart open-pubusb
+  tags:
+    - install
+
+- name: Render open-pubusb systemd unit
+  ansible.builtin.template:
+    src: open-pubusb.service.j2
+    dest: "{{ open_pubusb_systemd_unit_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart open-pubusb
+  tags:
+    - configure
+
+- name: Enable and start open-pubusb service
+  ansible.builtin.systemd_service:
+    name: "{{ open_pubusb_service_name }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  tags:
+    - service

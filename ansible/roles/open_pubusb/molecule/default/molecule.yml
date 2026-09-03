@@ -1,0 +1,33 @@
+---
+dependency:
+  name: galaxy
+  options:
+    # ${MOLECULE_PROJECT_DIRECTORY} = cwd molecule was invoked from
+    # (documented usage: `cd ansible/roles/open_pubusb && molecule test`), so
+    # this resolves to ansible/requirements.yml regardless of scenario.
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/../../requirements.yml
+driver:
+  name: docker
+platforms:
+  - name: open-pubusb-systemd
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+provisioner:
+  name: ansible
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+  inventory:
+    host_vars:
+      open-pubusb-systemd:
+        ansible_python_interpreter: /usr/bin/python3
+verifier:
+  name: ansible

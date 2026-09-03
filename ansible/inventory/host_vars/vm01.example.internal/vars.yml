@@ -1,0 +1,5 @@
+---
+# Example host-specific overrides for `open_pubusb_remote_example`'s
+# `vm01.example.internal`. Copy this pattern for real remote targets.
+open_pubusb_deploy_mode: systemd
+open_pubusb_version: "0.1.0"

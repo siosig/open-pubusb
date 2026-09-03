@@ -1,0 +1,59 @@
+---
+# All of these tasks talk to the live service (readyz endpoint, `open-pubusb
+# version`), so none of them make sense under --check (no service is
+# actually (re)started in check mode) — skip the whole file in that case
+# rather than let check mode see the earlier install/config diffs "pass"
+# and then fail here on unreachable endpoints/undefined output.
+- name: Wait for /readyz to become available
+  ansible.builtin.uri:
+    url: "http://{{ open_pubusb_bind_address if open_pubusb_bind_address != '0.0.0.0' else '127.0.0.1' }}:{{ open_pubusb_admin_port }}/readyz"
+    status_code: 200
+    method: GET
+  register: open_pubusb_readyz
+  until: open_pubusb_readyz.status == 200
+  retries: 30
+  delay: 2
+  when: open_pubusb_verify | bool and not ansible_check_mode
+  tags:
+    - verify
+
+- name: Query open-pubusb version (systemd mode)
+  ansible.builtin.command:
+    cmd: "{{ open_pubusb_binary_path }} version"
+  register: open_pubusb_version_output
+  changed_when: false
+  when:
+    - open_pubusb_verify | bool
+    - not ansible_check_mode
+    - open_pubusb_deploy_mode == 'systemd'
+  tags:
+    - verify
+
+- name: Query open-pubusb version (docker mode)
+  community.docker.docker_container_exec:
+    container: "{{ open_pubusb_service_name }}"
+    command: "open-pubusb version"
+  register: open_pubusb_version_output_docker
+  changed_when: false
+  when:
+    - open_pubusb_verify | bool
+    - not ansible_check_mode
+    - open_pubusb_deploy_mode == 'docker'
+  tags:
+    - verify
+
+- name: Assert reported version matches open_pubusb_version
+  ansible.builtin.assert:
+    that:
+      - ("open-pubusb " + open_pubusb_version + " (") in reported_version
+    fail_msg: >-
+      Deployed open-pubusb reports {{ reported_version | trim }}, expected version
+      {{ open_pubusb_version }}.
+    success_msg: "Deployed open-pubusb version matches open_pubusb_version={{ open_pubusb_version }}."
+  vars:
+    reported_version: >-
+      {{ (open_pubusb_version_output.stdout if open_pubusb_deploy_mode == 'systemd'
+          else open_pubusb_version_output_docker.stdout) | default('') }}
+  when: open_pubusb_verify | bool and not ansible_check_mode
+  tags:
+    - verify

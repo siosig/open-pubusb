@@ -1,0 +1,50 @@
+---
+- name: Assert open_pubusb_deploy_mode is supported
+  ansible.builtin.assert:
+    that:
+      - open_pubusb_deploy_mode in open_pubusb_valid_deploy_modes
+    fail_msg: >-
+      open_pubusb_deploy_mode={{ open_pubusb_deploy_mode }} is not supported;
+      must be one of {{ open_pubusb_valid_deploy_modes }}.
+    success_msg: "open_pubusb_deploy_mode={{ open_pubusb_deploy_mode }} is supported."
+  tags:
+    - preflight
+
+- name: Assert target architecture is supported (systemd mode only)
+  ansible.builtin.assert:
+    that:
+      - open_pubusb_target_triple | length > 0
+    fail_msg: >-
+      ansible_architecture={{ ansible_facts.architecture }} has no entry in
+      open_pubusb_arch_target_map; supported architectures are
+      {{ open_pubusb_arch_target_map.keys() | list }}.
+    success_msg: "ansible_architecture={{ ansible_facts.architecture }} maps to {{ open_pubusb_target_triple }}."
+  when: open_pubusb_deploy_mode == 'systemd'
+  tags:
+    - preflight
+
+- name: Check Docker daemon is reachable (docker mode only)
+  community.docker.docker_host_info:
+  register: open_pubusb_docker_host_info
+  when: open_pubusb_deploy_mode == 'docker'
+  tags:
+    - preflight
+
+- name: Assert Docker daemon responded (docker mode only)
+  ansible.builtin.assert:
+    that:
+      - open_pubusb_docker_host_info is succeeded
+    fail_msg: "Docker daemon is not reachable on this host; open_pubusb_deploy_mode=docker requires a running Docker Engine."
+  when: open_pubusb_deploy_mode == 'docker'
+  tags:
+    - preflight
+
+- name: Ensure required packages are present (systemd mode only)
+  ansible.builtin.package:
+    name:
+      - tar
+      - gzip
+    state: present
+  when: open_pubusb_deploy_mode == 'systemd'
+  tags:
+    - preflight

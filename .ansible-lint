@@ -1,0 +1,25 @@
+---
+exclude_paths:
+  - .git/
+  - target/
+  - target-agents/
+  - third_party/
+  - .specify/
+  # Non-Ansible YAML that a repo-root `ansible-lint` (no path argument) would
+  # otherwise pick up and fail on with yaml[*] rules: GitHub Actions
+  # workflows (yamllint-style document-start) and the vendored/installed
+  # node_modules of the standalone compat-test package. CI runs
+  # `ansible-lint ansible/` and is unaffected either way.
+  - .github/
+  - tests/compat/node/node_modules/
+  # Self-referential symlinks (molecule/<scenario>/roles/open_pubusb -> the role
+  # itself) so `ansible-playbook`/ansible-lint role resolution works when a
+  # scenario's converge.yml is parsed standalone. A naive recursive
+  # directory walk over these loops forever, so exclude them explicitly;
+  # the role's real files are still linted at their canonical path.
+  - ansible/roles/open_pubusb/molecule/default/roles/
+  - ansible/roles/open_pubusb/molecule/docker/roles/
+
+# The `open_pubusb_*` prefix on every role variable already provides the
+# namespacing var-naming[no-role-prefix] checks for; keep the default
+# ruleset otherwise (no profile override).

@@ -1,0 +1,35 @@
+[package]
+name = "open-pubusb-contract-tests"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+open-pubusb-proto = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true }
+reqwest = { workspace = true }
+serde_json = { workspace = true }
+pbjson-types = { workspace = true }
+# Used by `src/harness.rs` (`OpenPubusbHarness::send_sigterm`) to deliver a real
+# SIGTERM to the spawned `open-pubusb` child by pid (lifecycle contract
+# tests need to send SIGTERM, not just `Child::kill()`, which is SIGKILL on
+# Unix). Under `[dependencies]` rather than `[dev-dependencies]` because
+# `src/harness.rs` is part of this crate's lib target, which — per the
+# `#![allow(...)]` banner in `src/lib.rs` — compiles in non-test mode even
+# when only ever linked into `tests/*.rs` integration-test binaries.
+libc = "0.2"
+
+# NOTE: a `[dev-dependencies] open-pubusb = { path = "../../crates/open-pubusb" }` entry
+# was tried here to make `env!("CARGO_BIN_EXE_open-pubusb")` resolve in
+# `src/harness.rs`, but Cargo rejects it ("ignoring invalid dependency `open-pubusb`
+# which is missing a lib target") and never defines that env var, because
+# `open-pubusb` has no `[lib]` target (only `[[bin]]`) — `CARGO_BIN_EXE_<name>` is
+# only populated for a *package's own* binaries when compiling that same
+# package's integration tests/benches, not for a binary pulled in from a
+# separate dependency package. `harness.rs` instead locates the compiled
+# `open-pubusb` executable at runtime via `std::env::current_exe()` (see
+# `open_pubusb_bin_path()`), which works for any binary built into the same
+# workspace `target/` directory regardless of which package produced it.

@@ -1,0 +1,12 @@
+---
+- name: Restart open-pubusb
+  ansible.builtin.systemd_service:
+    name: "{{ open_pubusb_service_name }}"
+    state: restarted
+  when: open_pubusb_deploy_mode == 'systemd'
+
+- name: Recreate open-pubusb container
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/docker_container.yml"
+  vars:
+    open_pubusb_force_recreate: true
+  when: open_pubusb_deploy_mode == 'docker'

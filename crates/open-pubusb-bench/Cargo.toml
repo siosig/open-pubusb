@@ -1,0 +1,28 @@
+[package]
+name = "open-pubusb-bench"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "open-pubusb-bench"
+path = "src/main.rs"
+
+[dependencies]
+open-pubusb-proto = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+tonic = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+open-pubusb-core = { workspace = true }
+
+[[bench]]
+name = "filter"
+harness = false
+
+[[bench]]
+name = "keys"
+harness = false

@@ -1,0 +1,23 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  vars:
+    open_pubusb_deploy_mode: systemd
+  pre_tasks:
+    # The role installs from a published GitHub Release, which may not exist
+    # yet for the version under test. CI builds the release artifacts from the
+    # checkout, serves them from a local mirror, and passes the mirror and the
+    # version in through the environment; unset variables leave the role
+    # defaults (the real release) in effect.
+    - name: Use the version under test
+      ansible.builtin.set_fact:
+        open_pubusb_version: "{{ lookup('env', 'OPEN_PUBUSB_VERSION') }}"
+      when: lookup('env', 'OPEN_PUBUSB_VERSION') | length > 0
+
+    - name: Install from the local release mirror
+      ansible.builtin.set_fact:
+        open_pubusb_release_base_url: "{{ lookup('env', 'OPEN_PUBUSB_RELEASE_BASE_URL') }}"
+      when: lookup('env', 'OPEN_PUBUSB_RELEASE_BASE_URL') | length > 0
+  roles:
+    - role: open_pubusb

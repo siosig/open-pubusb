@@ -1,0 +1,55 @@
+# `cargo deny` configuration. Checked in CI (`.github/workflows/ci.yml`
+# `security` job, EmbarkStudios/cargo-deny-action) and locally via `cargo deny check`.
+# See https://embarkstudios.github.io/cargo-deny/ for the full schema.
+
+[graph]
+targets = [
+    { triple = "x86_64-unknown-linux-musl" },
+    { triple = "aarch64-unknown-linux-musl" },
+]
+
+[advisories]
+# RustSec advisory DB (yanked crates, security vulnerabilities). `cargo audit`
+# (the `security` CI job's other step) covers the same ground against the
+# same DB — this section is here mainly so `cargo deny check` alone is a
+# complete local pre-push check without needing both tools.
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+# Every license actually observed across this workspace's dependency graph
+# (`cargo deny check licenses` was run against the real resolved graph, not
+# guessed) — all standard OSS-permissive terms.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CDLA-Permissive-2.0",
+    "0BSD",
+    "BSL-1.0",
+    "CC0-1.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# This workspace's own inter-crate deps (`open-pubusb-core = { workspace = true }`
+# etc.) resolve to `path = "crates/..."` entries with no version
+# constraint — real "wildcard version" risk (an unpinned crates.io
+# dependency that could resolve to anything) doesn't apply to a path
+# dependency within the same workspace, so exempt those specifically
+# rather than loosening `wildcards` itself.
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

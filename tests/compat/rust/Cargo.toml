@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "open-pubusb-compat-rust"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+
+[dev-dependencies]
+gcloud-pubsub = "1"
+gcloud-googleapis = "1"
+google-cloud-pubsub = "1"
+google-cloud-auth = "1"
+uuid = { version = "1", features = ["v4"] }

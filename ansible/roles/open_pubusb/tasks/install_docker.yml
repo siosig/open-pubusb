@@ -1,0 +1,23 @@
+---
+- name: Ensure host data directory exists (bind-mount source, owned by the container user)
+  ansible.builtin.file:
+    path: "{{ open_pubusb_data_dir }}"
+    state: directory
+    owner: "{{ open_pubusb_container_uid }}"
+    group: "{{ open_pubusb_container_gid }}"
+    mode: '0750'
+  tags:
+    - install
+
+- name: Pull open-pubusb image
+  community.docker.docker_image_pull:
+    name: "{{ open_pubusb_image }}:{{ open_pubusb_image_tag }}"
+    pull: not_present
+  register: open_pubusb_image_pull
+  tags:
+    - install
+
+- name: Create/update open-pubusb container
+  ansible.builtin.include_tasks: docker_container.yml
+  tags:
+    - service

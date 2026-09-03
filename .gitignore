@@ -1,0 +1,19 @@
+/.claude/
+/.vscode/
+/.specify/
+/specs/
+/CLAUDE.md/
+
+# secretlint local-only denylist (company/personal terms — never committed)
+.secretlintrc.local.json
+target/
+target-agents/
+tmp/
+
+# Build/dependency artifacts of the standalone compat-test crates/packages
+# (tests/compat/{rust,node,python}/ — not workspace members, each has its
+# own toolchain-managed output dir).
+node_modules/
+__pycache__/
+.pytest_cache/
+*.egg-info/

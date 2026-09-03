@@ -1,0 +1,86 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/open-pubusb-proto",
+    "crates/open-pubusb-core",
+    "crates/open-pubusb",
+    "crates/open-pubusb-bench",
+    "tests/contract",
+    "tests/integration",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/siosig/open-pubusb"
+# Every crate here is an internal part of this one application, never
+# published to crates.io — `cargo deny check bans`'s `allow-wildcard-paths`
+# only exempts unpublishable crates from its wildcard-dependency check
+# (crates.io itself disallows path dependencies, so a publishable crate
+# with one really would be a problem), which is what this is actually for.
+publish = false
+
+[workspace.dependencies]
+open-pubusb-proto = { path = "crates/open-pubusb-proto" }
+open-pubusb-core = { path = "crates/open-pubusb-core" }
+
+tokio = { version = "1.53", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tokio-stream = "0.1"
+tonic = "0.14"
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+tonic-health = "0.14"
+tonic-reflection = "0.14"
+prost = "0.14"
+prost-types = "0.14"
+pbjson = "0.9"
+pbjson-build = "0.9"
+pbjson-types = "0.9"
+protox = "0.9"
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.7", features = ["trace"] }
+hyper = "1.11"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+bytes = "1.12"
+
+fjall = "3.1"
+roaring = "0.10"
+tempfile = "3"
+
+config = "0.15"
+clap = { version = "4.6", features = ["derive", "env"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-journald = "0.3"
+
+metrics = "0.24"
+metrics-exporter-prometheus = "0.18"
+
+sd-notify = "0.5"
+mimalloc = "0.1"
+
+thiserror = "2"
+anyhow = "1"
+
+uuid = { version = "1", features = ["v4"] }
+jiff = "0.1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+base64 = "0.22"
+
+pest = "2"
+pest_derive = "2"
+
+criterion = "0.5"
+proptest = "1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true

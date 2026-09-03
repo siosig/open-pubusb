@@ -1,0 +1,23 @@
+---
+- name: Ensure config directory exists
+  ansible.builtin.file:
+    path: "{{ open_pubusb_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  tags:
+    - configure
+
+- name: Render config.toml
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: "{{ open_pubusb_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart open-pubusb
+    - Recreate open-pubusb container
+  tags:
+    - configure

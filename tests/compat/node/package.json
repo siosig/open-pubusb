@@ -1,0 +1,13 @@
+{
+  "name": "open-pubusb-compat-node",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-force-exit"
+  },
+  "dependencies": {
+    "@google-cloud/pubsub": "^4.9.0",
+    "@grpc/grpc-js": "^1.14.4"
+  }
+}

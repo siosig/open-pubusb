@@ -1,0 +1,46 @@
+---
+dependency:
+  name: galaxy
+  options:
+    # ${MOLECULE_PROJECT_DIRECTORY} = cwd molecule was invoked from
+    # (documented usage: `cd ansible/roles/open_pubusb && molecule test`), so
+    # this resolves to ansible/requirements.yml regardless of scenario.
+    requirements-file: ${MOLECULE_PROJECT_DIRECTORY}/../../requirements.yml
+driver:
+  name: docker
+platforms:
+  - name: open-pubusb-docker
+    image: geerlingguy/docker-ubuntu2404-ansible:latest
+    pre_build_image: true
+    privileged: true
+    cgroupns_mode: host
+    command: /lib/systemd/systemd
+    # The instance reuses the host's Docker daemon (socket mount below) instead
+    # of running a nested dockerd, so the "open-pubusb" container the role
+    # manages is a sibling created by the host daemon. Two consequences:
+    #  - bind-mount sources the role passes to that container are resolved
+    #    on the host, so the paths the role writes to (config dir, data dir)
+    #    are shared with the host at the same location;
+    #  - the ports it publishes land in the host network namespace, so the
+    #    instance joins that namespace to reach them on 127.0.0.1.
+    network_mode: host
+    tmpfs:
+      - /run
+      - /run/lock
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - /etc/open-pubusb:/etc/open-pubusb:rw
+      - /srv/open-pubusb:/srv/open-pubusb:rw
+provisioner:
+  name: ansible
+  playbooks:
+    converge: converge.yml
+    verify: verify.yml
+    cleanup: cleanup.yml
+  inventory:
+    host_vars:
+      open-pubusb-docker:
+        ansible_python_interpreter: /usr/bin/python3
+verifier:
+  name: ansible

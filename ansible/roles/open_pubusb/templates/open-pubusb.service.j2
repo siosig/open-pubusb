@@ -1,0 +1,66 @@
+[Unit]
+Description=open-pubusb (Google Cloud Pub/Sub v1-compatible local server)
+Documentation=https://github.com/siosig/open-pubusb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart={{ open_pubusb_binary_path }} serve --config {{ open_pubusb_config_path }}
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec={{ open_pubusb_shutdown_grace_secs + 5 }}
+WatchdogSec=30
+
+# Runtime user/state: no dedicated system user to manage, no host-wide
+# writable directories beyond the state dir systemd creates for us.
+DynamicUser=true
+StateDirectory={{ open_pubusb_service_name }}
+StateDirectoryMode=0750
+Environment=OPEN_PUBUSB__STORAGE__DATA_DIR=%S/{{ open_pubusb_service_name }}
+
+# Hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+SystemCallFilter=@system-service
+# Trims two broad syscall groups @system-service still allows (chown() and
+# friends under @privileged; ioprio_set() and friends under @resources) —
+# open-pubusb (tokio async I/O + fjall) needs neither. `SystemCallFilter=` lines
+# combine: this ~-prefixed one subtracts from the allow-list above rather
+# than replacing it (systemd.exec(5) "System Call Filtering").
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+# open-pubusb only ever does TCP/UDP over IPv4/IPv6 (gRPC/REST listeners, DNS
+# resolution for reqwest Push delivery) plus local AF_UNIX/AF_NETLINK use
+# glibc's resolver can make — no AF_PACKET (raw packets) or other exotic
+# families.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# No device nodes needed at all (not even the read-only rtc access
+# ProtectClock's defaults otherwise leave in place).
+DeviceAllow=
+
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

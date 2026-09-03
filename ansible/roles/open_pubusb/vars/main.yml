@@ -1,0 +1,35 @@
+---
+# Role-internal fixed values (not meant to be overridden by users).
+
+# `ansible_architecture` -> Rust musl target triple
+# (`cargo-zigbuild` cross-builds x86_64-unknown-linux-musl and
+# aarch64-unknown-linux-musl). Any other arch fails preflight.
+open_pubusb_arch_target_map:
+  x86_64: x86_64-unknown-linux-musl
+  aarch64: aarch64-unknown-linux-musl
+  arm64: aarch64-unknown-linux-musl
+
+open_pubusb_target_triple: "{{ open_pubusb_arch_target_map[ansible_facts.architecture] | default('') }}"
+
+# Release tarball naming: open-pubusb-v<version>-<target-triple>.tar.gz
+open_pubusb_release_archive_name: "open-pubusb-v{{ open_pubusb_version }}-{{ open_pubusb_target_triple }}.tar.gz"
+open_pubusb_release_archive_url: "{{ open_pubusb_release_base_url }}/v{{ open_pubusb_version }}/{{ open_pubusb_release_archive_name }}"
+
+# Extraction/staging locations.
+open_pubusb_download_dir: /usr/local/lib/open-pubusb
+open_pubusb_release_archive_dest: "{{ open_pubusb_download_dir }}/{{ open_pubusb_release_archive_name }}"
+open_pubusb_release_extract_dir: "{{ open_pubusb_download_dir }}/v{{ open_pubusb_version }}-{{ open_pubusb_target_triple }}"
+
+# Deploy modes accepted by preflight.
+open_pubusb_valid_deploy_modes:
+  - systemd
+  - docker
+
+open_pubusb_systemd_unit_path: "/etc/systemd/system/{{ open_pubusb_service_name }}.service"
+open_pubusb_config_dir: /etc/open-pubusb
+open_pubusb_config_path: "{{ open_pubusb_config_dir }}/config.toml"
+
+# docker mode: fixed in-container mount points, independent of the host
+# paths (open_pubusb_data_dir, open_pubusb_config_path).
+open_pubusb_container_data_dir: /data
+open_pubusb_container_config_path: /etc/open-pubusb/config.toml

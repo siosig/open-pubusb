@@ -1,0 +1,59 @@
+---
+# Public variables for the `open_pubusb` role. ansible/README.md ("Variables"
+# section) documents each of them.
+# All of these may be overridden via group_vars/host_vars/-e.
+
+# `systemd` | `docker`. Any other value fails preflight.
+open_pubusb_deploy_mode: systemd
+
+# Release version to fetch (systemd) or image tag suffix (docker).
+open_pubusb_version: "0.1.0"
+
+# Network.
+open_pubusb_listen_port: 8085
+open_pubusb_admin_port: 8086
+open_pubusb_bind_address: "0.0.0.0"
+
+# Storage. `data_dir` differs by deploy mode per the contract. The server
+# persists topics/subscriptions/messages there with its embedded fjall store
+# (group-fsync'd); in docker mode it is bind-mounted into the container as
+# /data and owned by `open_pubusb_container_uid`/`_gid` (see below).
+open_pubusb_data_dir: "{{ '/var/lib/open-pubusb' if open_pubusb_deploy_mode == 'systemd' else '/srv/open-pubusb/data' }}"
+
+# `true` runs fully in-memory on a temporary directory (nothing survives a
+# restart); `false` (default) uses `open_pubusb_data_dir`.
+open_pubusb_ephemeral: false
+
+open_pubusb_sync_interval_ms: 50
+open_pubusb_shutdown_grace_secs: 30
+
+# Logging.
+open_pubusb_log_format: "{{ 'journald' if open_pubusb_deploy_mode == 'systemd' else 'json' }}"
+open_pubusb_log_level: info
+
+# Arbitrary extra `config.toml` sections/keys, merged in as-is
+# (dict -> TOML). Use for settings not covered by the variables above.
+open_pubusb_extra_config: {}
+
+# systemd install source (release tarball).
+open_pubusb_release_base_url: "https://github.com/siosig/open-pubusb/releases/download"
+open_pubusb_checksum_url: "{{ open_pubusb_release_base_url }}/v{{ open_pubusb_version }}/SHA256SUMS"
+open_pubusb_binary_path: /usr/local/bin/open-pubusb
+
+# Service / container identity.
+open_pubusb_service_name: open-pubusb
+
+# docker install source.
+open_pubusb_image: "ghcr.io/siosig/open-pubusb"
+open_pubusb_image_tag: "{{ open_pubusb_version }}"
+open_pubusb_docker_restart_policy: unless-stopped
+open_pubusb_docker_network: bridge
+# uid/gid the container process runs as (distroless `nonroot` = 65532). The
+# bind-mounted host data directory is chowned to this identity so the
+# non-root process can create the fjall database in /data.
+open_pubusb_container_uid: 65532
+open_pubusb_container_gid: 65532
+
+# Post-deploy verification.
+open_pubusb_verify: true
+open_pubusb_verify_timeout_secs: 60

@@ -1,0 +1,27 @@
+---
+galaxy_info:
+  role_name: open_pubusb
+  namespace: open_pubusb
+  author: open-pubusb maintainers
+  description: Deploys open-pubusb, a Google Cloud Pub/Sub v1-compatible local server, via systemd or Docker.
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
+    - name: EL
+      versions:
+        - "9"
+  galaxy_tags:
+    - pubsub
+    - messaging
+    - systemd
+    - docker
+
+dependencies: []
