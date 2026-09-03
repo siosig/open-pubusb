@@ -13,18 +13,15 @@
 #     never under QEMU) and cross-compiles to `$TARGETARCH` purely via zig's
 #     bundled cross-linker/libc, per research.md's guidance - only the final
 #     copy stage is multi-arch. `TARGETARCH` (amd64/arm64, set automatically
-#     by `docker buildx build --platform=linux/amd64,linux/arm64 ...`, as
-#     .github/workflows/release.yml's docker job does) is mapped to the
-#     matching musl target triple below.
-#     Verified in this sandbox for x86_64-unknown-linux-musl only (the only
-#     musl target `rustup target list --installed` showed available here, and
-#     the only platform `docker build .` targets without an explicit
-#     `--platform` flag). The aarch64-unknown-linux-musl leg was *not*
-#     independently verified against a running aarch64 binary in this sandbox
-#     (no aarch64 hardware/emulation available here) - treat it as "should
-#     work per cargo-zigbuild's documented cross-compilation support", not
-#     "proven", until a real `docker buildx build --platform linux/arm64`
-#     (as release.yml performs) confirms it on GitHub's infrastructure.
+#     by `docker buildx build --platform=...`) is mapped to the matching
+#     musl target triple below.
+#     Only x86_64-unknown-linux-musl is verified, and it is the only
+#     platform .github/workflows/release.yml publishes - that job builds
+#     `linux/amd64` alone, so the image pushed to GHCR is single-arch. The
+#     arm64 mapping below is kept so that a local `docker buildx build
+#     --platform linux/arm64` still works, but it has never been run
+#     against real aarch64 hardware - treat it as "should work per
+#     cargo-zigbuild's documented cross-compilation support", not "proven".
 #   - Final stage: gcr.io/distroless/static-debian12:nonroot (no shell, no
 #     libc even - matches the musl static binary; includes /etc/passwd,
 #     CA certs and tzdata, and a non-root `nonroot` user/group).

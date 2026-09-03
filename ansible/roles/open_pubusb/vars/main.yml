@@ -1,13 +1,13 @@
 ---
 # Role-internal fixed values (not meant to be overridden by users).
 
-# `ansible_architecture` -> Rust musl target triple
-# (`cargo-zigbuild` cross-builds x86_64-unknown-linux-musl and
-# aarch64-unknown-linux-musl). Any other arch fails preflight.
+# `ansible_architecture` -> Rust musl target triple. Only architectures
+# that the release workflow actually publishes a tarball for belong here:
+# an entry with no matching release artifact turns a clear preflight
+# failure into a confusing 404 at download time. Any other arch fails
+# preflight (see tasks/preflight.yml).
 open_pubusb_arch_target_map:
   x86_64: x86_64-unknown-linux-musl
-  aarch64: aarch64-unknown-linux-musl
-  arm64: aarch64-unknown-linux-musl
 
 open_pubusb_target_triple: "{{ open_pubusb_arch_target_map[ansible_facts.architecture] | default('') }}"
 

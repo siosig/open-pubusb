@@ -39,8 +39,8 @@ flowchart LR
 | Target | Requirement |
 |---|---|
 | Control node | ansible-core >= 2.16 (Python >= 3.10). `ansible-galaxy collection install -r requirements.yml` has been run |
-| Target host (systemd) | Linux x86_64 / aarch64, systemd 245+, `become` available, HTTPS access to GitHub Releases (or a local mirror URL set in `open_pubusb_release_base_url`) |
-| Target host (docker) | Docker Engine running, Python Docker SDK (required by `community.docker`), access to GHCR |
+| Target host (systemd) | Linux x86_64 (the only architecture released as a tarball), systemd 245+, `become` available, HTTPS access to GitHub Releases (or a local mirror URL set in `open_pubusb_release_base_url`) |
+| Target host (docker) | Linux x86_64 (the published image is single-arch `linux/amd64`), Docker Engine running, Python Docker SDK (required by `community.docker`), access to GHCR |
 | Target host (localhost) | The same role also works with `ansible_connection: local` |
 
 ## Directory Layout

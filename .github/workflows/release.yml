@@ -1,22 +1,24 @@
 name: release
 
-# On every `v*` tag push, cross-build musl release binaries, package them as
-# tarballs + a combined SHA256SUMS file, publish a GitHub Release
-# (softprops/action-gh-release), and build/push a multi-arch container image
-# (see the Dockerfile) to GHCR. Mirrors the job style of ./ci.yml (job names,
+# On every `v*` tag push, build the musl release binary, package it as a
+# tarball + a combined SHA256SUMS file, publish a GitHub Release
+# (softprops/action-gh-release), and build/push a container image (see the
+# Dockerfile) to GHCR. Mirrors the job style of ./ci.yml (job names,
 # `runs-on: ubuntu-latest`).
 #
 # Cross-compilation approach: cargo-zigbuild (https://github.com/rust-cross/
 # cargo-zigbuild) + zig, installed via the `ziglang` PyPI wheel — the same
 # approach used by the Dockerfile, verified working there for
-# x86_64-unknown-linux-musl in the local sandbox that authored this
-# workflow. aarch64-unknown-linux-musl is included in this matrix because
-# GitHub-hosted `ubuntu-latest` runners can cross-link musl/aarch64 with zig
-# without needing QEMU (zig ships its own bundled cross-linker/libc), but
-# that leg was NOT independently verified against a running aarch64 binary
-# in the authoring sandbox (no aarch64 hardware/emulation available there) —
-# treat it as "should work per cargo-zigbuild's documented cross-compilation
-# support" until a real tag push confirms it on GitHub's infrastructure.
+# x86_64-unknown-linux-musl.
+#
+# x86_64-unknown-linux-musl is the only architecture released.
+# aarch64-unknown-linux-musl should build (zig ships its own cross-linker
+# and libc, so GitHub's amd64 runners need no QEMU for it), but it has
+# never been run against real aarch64 hardware, so it is deliberately not
+# published rather than shipped unverified. Re-adding it means putting the
+# triple back in this build matrix, restoring `linux/arm64` to the docker
+# job's `platforms`, and adding the architecture back to
+# `open_pubusb_arch_target_map` in the Ansible role.
 
 on:
   push:
@@ -34,7 +36,6 @@ jobs:
       matrix:
         target:
           - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,8 +118,9 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: docker/setup-qemu-action@v3
-
+      # No docker/setup-qemu-action: the image is built for linux/amd64
+      # only, which is the runner's own architecture, so nothing needs
+      # emulating. Restoring linux/arm64 below means restoring QEMU here.
       - uses: docker/setup-buildx-action@v4
 
       - uses: docker/login-action@v3
@@ -139,7 +141,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           provenance: true
           sbom: true

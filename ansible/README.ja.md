@@ -39,8 +39,8 @@ flowchart LR
 | 対象 | 前提 |
 |---|---|
 | コントロールノード | ansible-core ≥ 2.16（Python ≥ 3.10）。`ansible-galaxy collection install -r requirements.yml` 実行済み |
-| 対象ホスト（systemd） | Linux x86_64 / aarch64、systemd 245+、`become` 可能、GitHub Releases へ HTTPS 到達可（またはローカルミラー URL を `open_pubusb_release_base_url` に指定） |
-| 対象ホスト（docker） | Docker Engine 稼働、Python Docker SDK（`community.docker` の要件）、GHCR へ到達可 |
+| 対象ホスト（systemd） | Linux x86_64（tarball を配布している唯一のアーキテクチャ）、systemd 245+、`become` 可能、GitHub Releases へ HTTPS 到達可（またはローカルミラー URL を `open_pubusb_release_base_url` に指定） |
+| 対象ホスト（docker） | Linux x86_64（配布イメージは `linux/amd64` の単一アーキ）、Docker Engine 稼働、Python Docker SDK（`community.docker` の要件）、GHCR へ到達可 |
 | 対象ホスト（localhost） | `ansible_connection: local` でも同じロールが動く |
 
 ## ディレクトリ構成
