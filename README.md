@@ -83,8 +83,11 @@ Using the same paths and JSON shapes (proto3 JSON mapping) as the Cloud Pub/Sub 
 | POST | `/v1/projects/{p}/subscriptions/{s}:pull` | Pull |
 | POST | `/v1/projects/{p}/subscriptions/{s}:acknowledge` | Acknowledge |
 | POST | `/v1/projects/{p}/subscriptions/{s}:modifyAckDeadline` | ModifyAckDeadline |
+| POST | `/v1/projects/{p}/subscriptions/{s}:modifyPushConfig` | ModifyPushConfig |
 
-StreamingPull, push delivery, Snapshot/Seek, DLQ, filters, and retry backoff are gRPC-only (not available over REST; they return `501`).
+The `PUT .../subscriptions/{s}` body is the full `Subscription` message, decoded with the same proto3 JSON mapping and mapped through the same conversion the gRPC `CreateSubscription` uses. So push delivery, filters, dead-letter policies, retry policies, and the other subscription fields are configurable over REST exactly as they are over gRPC. A body carrying a field this server does not model is rejected with `400 INVALID_ARGUMENT` rather than being silently ignored.
+
+StreamingPull and Snapshot/Seek remain gRPC-only (over REST they return `501`).
 
 ## Configuration
 

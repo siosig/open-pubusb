@@ -4,12 +4,17 @@
 //! `subscription_to_proto` converters and the generated `pb::*` types'
 //! `pbjson`-derived `Serialize` impls, so the wire format (camelCase,
 //! base64 `bytes`, RFC 3339 `Timestamp`, `"600s"` `Duration`) matches the
-//! contract exactly without hand-rolling it. Request bodies, which the
-//! contract only specifies loosely (`{"messages":[...]}`,
-//! `{"topic":"..."}`, ...), use small local structs instead of the full
-//! generated request types (whose shapes don't match what a REST caller
-//! actually sends — e.g. `PublishRequest` also carries `topic`, which here
-//! comes from the URL path instead).
+//! contract exactly without hand-rolling it.
+//!
+//! Request bodies split two ways. The verb endpoints (`:publish`,
+//! `:pull`, `:acknowledge`, ...) use small local structs, because the
+//! generated request types' shapes don't match what a REST caller
+//! actually sends — e.g. `PublishRequest` also carries `topic`, which
+//! here comes from the URL path instead. Resource bodies that the
+//! contract defines as a whole message — currently `Subscription` on
+//! `PUT .../subscriptions/{sub}` — are decoded straight into the
+//! generated type, so that they stay field-for-field identical to the
+//! gRPC path and reject unknown fields instead of dropping them.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -22,7 +27,9 @@ use open_pubusb_core::store::kv::KvStore;
 use serde::{Deserialize, Serialize};
 
 use crate::grpc::publisher::topic_to_proto;
-use crate::grpc::subscriber::subscription_to_proto;
+use crate::grpc::subscriber::{
+    create_options_from_proto, push_config_from_proto, subscription_to_proto,
+};
 use crate::rest::error::RestError;
 
 fn topic_name(project: &str, topic: &str) -> String {
@@ -198,26 +205,35 @@ pub async fn topic_post<K: KvStore + 'static>(
 
 // -- Subscriptions ---------------------------------------------------------
 
-#[derive(Deserialize, Default)]
-pub struct CreateSubscriptionBody {
-    pub topic: String,
-    #[serde(default, rename = "ackDeadlineSeconds")]
-    pub ack_deadline_seconds: Option<i32>,
-    #[serde(default)]
-    pub labels: HashMap<String, String>,
-}
-
+/// The request body is the full generated `Subscription` message, decoded
+/// through its `pbjson` proto3-JSON `Deserialize` impl, and then mapped by
+/// the very same `create_options_from_proto` the gRPC `CreateSubscription`
+/// uses. Two properties fall out of that and are the reason it is done this
+/// way rather than with a hand-written subset struct:
+///
+/// * Every field the gRPC path honors (`pushConfig`, `filter`,
+///   `deadLetterPolicy`, `retryPolicy`, ...) is honored here too, and the
+///   two transports cannot drift apart field-by-field.
+/// * The generated impl *rejects* unknown fields, so a body carrying
+///   something this server does not model fails loudly with `400` instead
+///   of being silently dropped.
 pub async fn create_subscription<K: KvStore + 'static>(
     State(svc): State<Arc<PubSubService<K>>>,
     Path((project, sub)): Path<(String, String)>,
-    Json(body): Json<CreateSubscriptionBody>,
+    body: axum::body::Bytes,
 ) -> Result<impl IntoResponse, RestError> {
-    let opts = open_pubusb_core::subscription::CreateSubscriptionOptions {
-        ack_deadline_secs: body.ack_deadline_seconds,
-        labels: body.labels,
-        ..Default::default()
+    let requested: open_pubusb_proto::pubsub::v1::Subscription = if body.is_empty() {
+        Default::default()
+    } else {
+        serde_json::from_slice(&body).map_err(|e| {
+            RestError::Domain(open_pubusb_core::Error::InvalidArgument {
+                field: "body".to_string(),
+                message: format!("invalid Subscription: {e}"),
+            })
+        })?
     };
-    let record = svc.create_subscription(&sub_name(&project, &sub), &body.topic, opts)?;
+    let opts = create_options_from_proto(&requested);
+    let record = svc.create_subscription(&sub_name(&project, &sub), &requested.topic, opts)?;
     Ok(Json(subscription_to_proto(&record)))
 }
 
@@ -335,6 +351,38 @@ async fn modify_ack_deadline<K: KvStore + 'static>(
     Ok(Json(serde_json::json!({})))
 }
 
+#[derive(Deserialize, Default)]
+pub struct ModifyPushConfigBody {
+    #[serde(default, rename = "pushConfig")]
+    pub push_config: Option<open_pubusb_proto::pubsub::v1::PushConfig>,
+}
+
+/// An absent body, an absent `pushConfig`, or a `pushConfig` with an empty
+/// `pushEndpoint` all switch the subscription back to Pull — the same
+/// emptiness rule the gRPC `ModifyPushConfig` applies.
+async fn modify_push_config<K: KvStore + 'static>(
+    svc: &PubSubService<K>,
+    full_name: &str,
+    body: serde_json::Value,
+) -> Result<impl IntoResponse, RestError> {
+    let body: ModifyPushConfigBody = if body.is_null() {
+        ModifyPushConfigBody::default()
+    } else {
+        serde_json::from_value(body).map_err(|e| {
+            RestError::Domain(open_pubusb_core::Error::InvalidArgument {
+                field: "body".to_string(),
+                message: e.to_string(),
+            })
+        })?
+    };
+    let push_config = body
+        .push_config
+        .filter(|c| !c.push_endpoint.is_empty())
+        .map(push_config_from_proto);
+    svc.modify_push_config(full_name, push_config)?;
+    Ok(Json(serde_json::json!({})))
+}
+
 /// Dispatches every `POST /v1/projects/{p}/subscriptions/{sub}:verb`
 /// request (see `router::router`'s doc comment for why they all share one
 /// route registration). An unrecognized verb (or none) is a REST-layer
@@ -360,6 +408,12 @@ pub async fn subscription_post<K: KvStore + 'static>(
         Some("modifyAckDeadline") => {
             let json = parse_body_lenient(&body)?;
             Ok(modify_ack_deadline(&svc, &full_name, json)
+                .await?
+                .into_response())
+        }
+        Some("modifyPushConfig") => {
+            let json = parse_body_lenient(&body)?;
+            Ok(modify_push_config(&svc, &full_name, json)
                 .await?
                 .into_response())
         }

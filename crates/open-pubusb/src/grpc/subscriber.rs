@@ -83,7 +83,9 @@ fn push_config_to_proto(cfg: &open_pubusb_core::subscription::PushConfig) -> pb:
 /// Converts a proto `PushConfig` to the domain shape. Logs a one-time-per-call
 /// warning if `oidc_token` was set (accepted, not acted upon — see
 /// [`open_pubusb_core::subscription::PushConfig`]'s doc comment).
-fn push_config_from_proto(pc: pb::PushConfig) -> open_pubusb_core::subscription::PushConfig {
+pub(crate) fn push_config_from_proto(
+    pc: pb::PushConfig,
+) -> open_pubusb_core::subscription::PushConfig {
     if pc.authentication_method.is_some() {
         tracing::warn!(
             "PushConfig.oidc_token was set but this server has no OIDC-issuing backend; \
@@ -140,7 +142,7 @@ pub(crate) fn subscription_to_proto(record: &SubscriptionRecord) -> pb::Subscrip
     }
 }
 
-fn create_options_from_proto(sub: &pb::Subscription) -> CreateSubscriptionOptions {
+pub(crate) fn create_options_from_proto(sub: &pb::Subscription) -> CreateSubscriptionOptions {
     CreateSubscriptionOptions {
         ack_deadline_secs: (sub.ack_deadline_seconds != 0).then_some(sub.ack_deadline_seconds),
         retain_acked_messages: sub.retain_acked_messages,

@@ -83,8 +83,11 @@ Cloud Pub/Sub REST と同じパス・JSON 形（proto3 JSON マッピング）�
 | POST | `/v1/projects/{p}/subscriptions/{s}:pull` | Pull |
 | POST | `/v1/projects/{p}/subscriptions/{s}:acknowledge` | Acknowledge |
 | POST | `/v1/projects/{p}/subscriptions/{s}:modifyAckDeadline` | ModifyAckDeadline |
+| POST | `/v1/projects/{p}/subscriptions/{s}:modifyPushConfig` | ModifyPushConfig |
 
-StreamingPull・Push・Snapshot/Seek・DLQ・フィルタ・再試行バックオフは gRPC のみ（REST では未提供、`501`）。
+`PUT .../subscriptions/{s}` のボディは `Subscription` メッセージ全体で、proto3 JSON マッピングで復号したうえで gRPC の `CreateSubscription` と同じ変換を通す。したがって Push 配信・フィルタ・DLQ・再試行ポリシーなどのフィールドは、gRPC と同様に REST からも設定できる。本サーバーが扱わないフィールドを含むボディは、黙って無視せず `400 INVALID_ARGUMENT` で拒否する。
+
+StreamingPull と Snapshot/Seek は引き続き gRPC のみ（REST では `501`）。
 
 ## 設定
 

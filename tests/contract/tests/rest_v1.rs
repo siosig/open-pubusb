@@ -640,3 +640,215 @@ async fn create_duplicate_topic_returns_409() {
         Some("ALREADY_EXISTS")
     );
 }
+
+/// Decoding the create body as the generated `Subscription` is what makes
+/// `pushConfig` work over REST at all: the hand-written subset struct that
+/// preceded it had no such field, so serde dropped it and the caller got a
+/// Pull subscription back with a `200`.
+#[tokio::test]
+async fn create_subscription_honors_push_config() {
+    let harness = OpenPubusbHarness::start().await;
+    let base = harness.rest_base_url();
+    let client = reqwest::Client::new();
+    let endpoint = "http://127.0.0.1:9/push";
+
+    let project = "proj-rest";
+    let topic = unique_id("topic-push-create");
+    let sub = unique_id("sub-push-create");
+    client
+        .put(format!("{base}/v1/projects/{project}/topics/{topic}"))
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("PUT topic request failed");
+
+    let sub_url = format!("{base}/v1/projects/{project}/subscriptions/{sub}");
+    let resp = client
+        .put(&sub_url)
+        .json(&json!({
+            "topic": format!("projects/{project}/topics/{topic}"),
+            "pushConfig": { "pushEndpoint": endpoint },
+        }))
+        .send()
+        .await
+        .expect("PUT subscription request failed");
+
+    assert_eq!(resp.status().as_u16(), 200);
+    let created: Value = resp.json().await.expect("response body was not JSON");
+    assert_eq!(
+        created
+            .pointer("/pushConfig/pushEndpoint")
+            .and_then(Value::as_str),
+        Some(endpoint),
+        "the create response must echo the push config back: {created}"
+    );
+
+    let fetched: Value = client
+        .get(&sub_url)
+        .send()
+        .await
+        .expect("GET subscription request failed")
+        .json()
+        .await
+        .expect("response body was not JSON");
+    assert_eq!(
+        fetched
+            .pointer("/pushConfig/pushEndpoint")
+            .and_then(Value::as_str),
+        Some(endpoint),
+        "the push config must be persisted, not merely echoed: {fetched}"
+    );
+}
+
+/// Same mechanism as the push config, on a second field, to pin down that
+/// the fix is "every field the gRPC path honors" rather than a one-off
+/// special case for `pushConfig`.
+#[tokio::test]
+async fn create_subscription_honors_filter() {
+    let harness = OpenPubusbHarness::start().await;
+    let base = harness.rest_base_url();
+    let client = reqwest::Client::new();
+    let filter = "attributes.color = \"blue\"";
+
+    let project = "proj-rest";
+    let topic = unique_id("topic-filter-create");
+    let sub = unique_id("sub-filter-create");
+    client
+        .put(format!("{base}/v1/projects/{project}/topics/{topic}"))
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("PUT topic request failed");
+
+    let sub_url = format!("{base}/v1/projects/{project}/subscriptions/{sub}");
+    let resp = client
+        .put(&sub_url)
+        .json(&json!({
+            "topic": format!("projects/{project}/topics/{topic}"),
+            "filter": filter,
+        }))
+        .send()
+        .await
+        .expect("PUT subscription request failed");
+
+    assert_eq!(resp.status().as_u16(), 200);
+    let created: Value = resp.json().await.expect("response body was not JSON");
+    assert_eq!(
+        created.get("filter").and_then(Value::as_str),
+        Some(filter),
+        "the filter must survive the create: {created}"
+    );
+}
+
+/// The generated `Deserialize` rejects unknown fields, which is the half of
+/// the contract that turns a typo (or a field this server does not model)
+/// into a loud `400` instead of a silently ignored one.
+#[tokio::test]
+async fn create_subscription_rejects_unknown_field() {
+    let harness = OpenPubusbHarness::start().await;
+    let base = harness.rest_base_url();
+    let client = reqwest::Client::new();
+
+    let project = "proj-rest";
+    let topic = unique_id("topic-unknown-field");
+    let sub = unique_id("sub-unknown-field");
+    client
+        .put(format!("{base}/v1/projects/{project}/topics/{topic}"))
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("PUT topic request failed");
+
+    let resp = client
+        .put(format!("{base}/v1/projects/{project}/subscriptions/{sub}"))
+        .json(&json!({
+            "topic": format!("projects/{project}/topics/{topic}"),
+            "pushConfigTypo": { "pushEndpoint": "http://127.0.0.1:9/push" },
+        }))
+        .send()
+        .await
+        .expect("PUT subscription request failed");
+
+    assert_eq!(resp.status().as_u16(), 400);
+    let body: Value = resp.json().await.expect("response body was not JSON");
+    assert_eq!(
+        body.pointer("/error/status").and_then(Value::as_str),
+        Some("INVALID_ARGUMENT"),
+        "unknown fields must be rejected, not dropped: {body}"
+    );
+}
+
+/// `POST .../subscriptions/{sub}:modifyPushConfig`, including the emptiness
+/// rule the gRPC method uses: an empty `pushConfig` switches back to Pull.
+#[tokio::test]
+async fn modify_push_config_sets_then_clears_endpoint() {
+    let harness = OpenPubusbHarness::start().await;
+    let base = harness.rest_base_url();
+    let client = reqwest::Client::new();
+    let endpoint = "http://127.0.0.1:9/push";
+
+    let project = "proj-rest";
+    let topic = unique_id("topic-modify-push");
+    let sub = unique_id("sub-modify-push");
+    client
+        .put(format!("{base}/v1/projects/{project}/topics/{topic}"))
+        .json(&json!({}))
+        .send()
+        .await
+        .expect("PUT topic request failed");
+
+    let sub_url = format!("{base}/v1/projects/{project}/subscriptions/{sub}");
+    client
+        .put(&sub_url)
+        .json(&json!({ "topic": format!("projects/{project}/topics/{topic}") }))
+        .send()
+        .await
+        .expect("PUT subscription request failed");
+
+    let modify_url = format!("{sub_url}:modifyPushConfig");
+    let resp = client
+        .post(&modify_url)
+        .json(&json!({ "pushConfig": { "pushEndpoint": endpoint } }))
+        .send()
+        .await
+        .expect("POST :modifyPushConfig request failed");
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let fetched: Value = client
+        .get(&sub_url)
+        .send()
+        .await
+        .expect("GET subscription request failed")
+        .json()
+        .await
+        .expect("response body was not JSON");
+    assert_eq!(
+        fetched
+            .pointer("/pushConfig/pushEndpoint")
+            .and_then(Value::as_str),
+        Some(endpoint),
+        "the subscription must have switched to push: {fetched}"
+    );
+
+    let resp = client
+        .post(&modify_url)
+        .json(&json!({ "pushConfig": {} }))
+        .send()
+        .await
+        .expect("POST :modifyPushConfig (clear) request failed");
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let cleared: Value = client
+        .get(&sub_url)
+        .send()
+        .await
+        .expect("GET subscription request failed")
+        .json()
+        .await
+        .expect("response body was not JSON");
+    assert_eq!(
+        cleared.get("pushConfig"),
+        None,
+        "an empty push config must switch the subscription back to pull: {cleared}"
+    );
+}
